@@ -64,6 +64,15 @@ class s_func_cyln():
         plt.close()
         
     def plot_fluxSurf_3D(self, loc):
+        """
+        Plot S sourface contours along entire toroidal domain and save as png
+        
+        Parameters
+        -----------------------------------------------------------------------
+        loc : str
+            location where figure will be saved
+            
+        """
         fig = plt.figure(figsize=(16.,4.))
         ax = fig.add_subplot(111, projection = '3d')
         
@@ -104,6 +113,8 @@ class s_func_cyln():
         
         ax.view_init(azim=30, elev=60)
         
+        ### Lance - plot Lorentz fource data here ###
+        
         fig.savefig(os.path.join(loc, 'LCFS_3D.png'))
         plt.close()        
         
@@ -114,9 +125,4 @@ plot_dirc = os.path.join(dirc, 'Figures')
 file_name = os.path.join(data_dirc, 's_surf_polar.h5')
 
 Sval = s_func_cyln(file_name)
-
-p_samp = np.linspace(0, Sval.p_dom[-1], 50)
-for p in p_samp:
-    Sval.plot_torCS(plot_dirc, p)
-
-#Sval.plot_fluxSurf_3D(plot_dirc)
+Sval.plot_fluxSurf_3D(plot_dirc)

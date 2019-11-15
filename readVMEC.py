@@ -52,7 +52,7 @@ class readVMEC:
         self.u_num = self.mpol * 4
         self.v_num = self.ntor 
         
-        self.s_dom = np.linspace(0, 1, self.ns)# np.arange( self.ns / (self.ns - 1) ) 
+        self.s_dom = np.linspace(0, 1, self.ns)
         self.u_dom = np.linspace(0, 2*np.pi, self.u_num)
         self.v_dom = np.linspace(0, .5*np.pi, self.v_num)
         
@@ -282,7 +282,7 @@ class readVMEC:
         Bz_coord = Bu_coord * self.dZu_coord
         self.B_flux = np.stack((Br_coord, Bv_coord, Bz_coord), axis=3)
         
-    def cylndCoord_Bfield(self, r_res=0.001, z_res=0.001):
+    def cylndCoord_Bfield(self, r_res=0.005, z_res=0.005):
         """
         Interpolates the magnetic field in real space in cylindrical coordinates, 
         indexed by the cylindrical domain [r,theta,z].        
@@ -333,7 +333,7 @@ class readVMEC:
                     self.B_cyld[r_ind, v, z_ind] = self.B_flux[s,v,u]
         
         z_grd, r_grd = np.meshgrid(self.z_dom, self.r_dom)
-        for v in range(self.v_num):
+        for v in range(self.v_num):            
             Br = self.B_cyld[0::, v, 0::, 0]
             Bv = self.B_cyld[0::, v, 0::, 1]
             Bz = self.B_cyld[0::, v, 0::, 2]
@@ -353,7 +353,7 @@ class readVMEC:
             Bz = griddata((r_grd_mask, z_grd_mask), Bz_mask, (r_grd, z_grd))  
             
             self.B_cyld[0::, v, 0::] = np.stack((Br, Bv, Bz), axis=2)
-        
+    
     def plot_fluxSurf(self, dirc, tor=0):
         """
         Plots a selection of flux surfaces in real space across a toroidal plane
@@ -479,14 +479,34 @@ class readVMEC:
         h5.create_dataset('z dom', data=self.z_dom)
         
         h5.close()
+        
+    def save_Bfield_Cyldrical(self, loc):
+        """
+        Save an hdf5 file of the B field, indexed in cylindrical coordinates [r,p,z]
+        
+        Parameters
+        ------------------------------------------------------------------------
+        loc : str
+            Directory in which hdf5 file is saved
+        """
+        try:
+            self.B_cyld
+        except:
+            self.cylndCoord_Bfield()
+            
+        name = os.path.join(loc, 'B_field.h5')
+        h5 = hf.File(name, 'w')
+        
+        h5.create_dataset('B field', data=self.B_cyld)
+        
+        h5.create_dataset('r dom', data=self.r_dom)
+        h5.create_dataset('z dom', data=self.z_dom)
+        h5.create_dataset('p dom', data=self.v_dom)
+        
+        h5.close()
 
 dirc_name = os.getcwd()
-data_dirc = os.path.join(dirc_name, 'output')
-file_name = os.path.join(data_dirc, 'wout_qh_opt0.nc')
-
-data_dirc = os.path.join(dirc_name, 'Data')
-plot_dirc = os.path.join(dirc_name, 'Figures')
+file_name = os.path.join(dirc_name, 'wout_QHS_Rstart_1_513_32polmodes_18x24_axis_v2.nc')
 
 vmec_data = readVMEC(file_name)
-
-vmec_data.save_Sval_Cartesian(data_dirc)
+vmec_data.save_Bfield_Cyldrical(dirc_name)
