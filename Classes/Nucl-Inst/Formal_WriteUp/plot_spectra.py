@@ -43,7 +43,7 @@ fnt = 14
 
 plt.xlabel('Channel', fontsize=fnt)
 plt.ylabel('Counts', fontsize=fnt)
-plt.title('Spectra', fontsize=fnt+2)
+plt.title('Alpha Decay Spectra', fontsize=fnt+2)
 
 plt.legend(title='Pressure (Torr)')
 #plt.show()
