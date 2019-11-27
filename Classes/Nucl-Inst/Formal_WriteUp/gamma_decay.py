@@ -70,7 +70,7 @@ class data():
         plt.close()
         
     def plot_linReg(self):
-        x, y, y_err = self.data[0], np.log10(self.data[1] - self.back), (np.sqrt(self.data[2]**2 + self.back_err**2)/self.data[1])
+        x, y, y_err = self.data[0], np.log(self.data[1] - self.back), (np.sqrt(self.data[2]**2 + self.back_err**2)/self.data[1])
         self.m, self.b, r_value, p_value, std_err = linregress(x, y)
         
         fig = plt.figure()
@@ -78,12 +78,16 @@ class data():
         
         ax.errorbar(x, y, yerr=y_err, ls='None', c='k')
         ax.scatter(x, y, s=25, c='k')
-        ax.plot(x, line(x, self.m, self.b), ls='--', c='k', label=r'Slope = %.3f $\pm$ %.3f' % (self.m, std_err))
+        if self.shld == 'Aluminum':
+            ax.plot(x, line(x, self.m, self.b), ls='--', c='k', label=r'$\mu_{Al}$'+r' = (%.3f $\pm$ %.3f)' % (-self.m, std_err) +r' $cm^{2}/g$')
+        else:
+            ax.plot(x, line(x, self.m, self.b), ls='--', c='k', label=r'$\mu_{Pb}$'+r' = (%.3f $\pm$ %.3f)' % (-self.m, std_err) +r' $cm^{2}/g$')
+
         
         fnt = 14
         
         ax.set_xlabel('Thickness $(g/cm^{2})$', fontsize=fnt)
-        ax.set_ylabel(r'$log_{10}(\#)$', fontsize=fnt)
+        ax.set_ylabel(r'$\ln(\#/s)$', fontsize=fnt)
         
         ax.set_title(self.shld+' Shield', fontsize=fnt+2)
         

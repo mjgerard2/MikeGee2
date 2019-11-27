@@ -15,18 +15,25 @@ from matplotlib import gridspec
 from scipy.interpolate import interp1d
 from scipy.stats import linregress
 
-def gradient(f, x):
-    f_int = (f[2::] - f[0:-2]) / (x[2::] - x[0:-2])
-    f_lft = (f[1] - f[0]) / (x[1] - x[0])
-    f_rgt = (f[-1] - f[-2]) / (x[-1] - x[-2])
+def grad_err(f, x):
+    err = np.empty(f.shape)
     
-    df = np.insert(f_int, 0, f_lft)
-    df = np.append(df, f_rgt)
+    err[0] = .5 * (f[1] - f[0])
+    err[-1] = .5  * (f[-1] - f[-2])
     
-    return df
-
+    for ind, val in enumerate(f[1:-1]):
+        x1 = [x[ind-1], x[ind], x[ind+1]]
+        y1 = [f[ind-1], f[ind], f[ind+1]]
+        m, b, r, s, std = linregress(x1, y1)
+        err[ind] = .5 * m * (x[ind+1] - x[ind-1])
+    
+    return err        
+    
 def line(x, m, b):
     return m * x + b
+
+def find_nearest(array, val):
+    return np.argmin((array - val)**2)
 
 loc = ('Wk1_MetaData.xlsx')
 
@@ -69,33 +76,57 @@ Deff = eff_dist*sort_data[0]
 Crat = 0.00833333 * sort_data[3]
 
 Cerr = 0.00833333*sort_data[4]
-Derr = eff_dist*pres_err
+Derr = eff_dist*np.hypot(pres_err, .6)
 
-lin_C = Crat[Deff < 3.5]
+D_mark = 3.66
+ 
+indx = find_nearest(Deff, D_mark)
+knee_Deff = Deff[indx]
+knee_Crat = Crat[indx]
+
+lin_C = Crat[Deff < D_mark]
 lin_C_avg = np.mean(lin_C)
+lin_C_std = np.std(lin_C)
+lin_C_err = np.sum(Cerr[Deff < D_mark]**2) / len(lin_C)
 
-stop_C = Crat[Deff > 3.5]
-stop_D = Deff[Deff > 3.5]
+stop_C = Crat[Deff > D_mark]
+stop_D = Deff[Deff > D_mark]
 ms, bs, r_value, p_value, std_err = linregress(stop_D, stop_C)
 
-stop_Ceff = .5*lin_C_avg
-stop_Ceff_err = abs(.5 * np.std(lin_C))
+stop_C_err = np.sum(Cerr[Deff > D_mark]**2) / len(stop_C)
 
-Cerr_sum = np.sum(Cerr**2) / len(Cerr)
-Cerr_tot = np.hypot(Cerr_sum, stop_Ceff_err)
+stop_Ceff = .5*lin_C_avg
+stop_Ceff_err = np.hypot(lin_C_std, lin_C_err)
+
+#Cerr_sum = np.sum(Cerr**2) / len(Cerr)
+#Cerr_tot = np.hypot(Cerr_sum, stop_Ceff_err)
 
 stop_Deff = (stop_Ceff - bs) / ms
-stop_Deff_err = abs(Cerr_tot / ms)
+stop_Deff_err =  np.hypot((2*stop_Ceff_err) / ms, stop_C_err) #abs(Cerr_tot / ms)
 
 en_scl = 5.486 / sort_data[1][0]
 avg_eng = sort_data[1] * en_scl
 
+mEn, bEn, rEn, sEn, std = linregress(sort_data[0][0:10], sort_data[1][0:10])
+#en_err = abs(mEn * en_scl * sort_data[0][0])
+en_err = round(abs(en_scl * (bEn - sort_data[1][0])), 2)
+
+en_err = np.hypot(en_scl, en_err)
+
 avg_eng_intp = interp1d(Deff, avg_eng, kind='cubic')
 Deff_new = np.linspace(Deff[0], Deff[-1], 1000)
 Eng_new = avg_eng_intp(Deff_new)
-stop_pwr = -gradient(Eng_new, Deff_new)
+stop_pwr = -np.gradient(Eng_new, Deff_new[1]-Deff_new[0])
 
-stp_pwr_intp = interp1d(Deff_new, stop_pwr)
+MR_ind = np.argmax(stop_pwr)
+stp_MR = stop_pwr[MR_ind]
+eng_MR = Eng_new[MR_ind]
+Deff_MR = Deff_new[MR_ind]
+
+stp_pwr_intp = interp1d(Eng_new, stop_pwr)
+
+stp_pwr_data = stp_pwr_intp(avg_eng)
+stp_err = grad_err(stp_pwr_data, avg_eng)
 
 fnt = 14
 
@@ -107,8 +138,8 @@ gs = gridspec.GridSpec(4, 2)
 ax1 = fig.add_subplot(gs[0:2, 0:2])
 ax2 = fig.add_subplot(gs[2:4, 0:2], sharex=ax1)
 
-ax1.errorbar(sort_data[0], sort_data[1], xerr=pres_err, yerr=1, c='g')
-ax1.scatter(sort_data[0], sort_data[1], s=15, c='g')
+ax1.errorbar(sort_data[0], sort_data[1], xerr=pres_err, yerr=1, c='k')
+ax1.scatter(sort_data[0], sort_data[1], s=15, c='k')
 ax1.set_ylabel('Channel', fontsize=fnt)
 ax1.set_title('Features of Alpha Decay Peak', fontsize=fnt+2)
 
@@ -125,46 +156,50 @@ ax2.grid()
 plt.savefig('alf_peak_feat.png')
 plt.close()
 
-
 ### Plot Average Energy ###
-'''
-plt.errorbar(Deff, avg_eng, yerr=en_scl)
-plt.scatter(Deff, avg_eng, s=25)
 
-plt.xlabel('Effective Distance (cm)', fontsize=fnt)
+plt.errorbar(Deff, avg_eng, yerr=en_err, color='k')
+plt.scatter(Deff, avg_eng, s=25, color='k')
+plt.scatter([Deff_MR], [eng_MR], c='r', s=150, marker='*', label='( %.2f cm, %.2f MeV)' % (Deff_MR, eng_MR))
+
+plt.xlabel(r'$d_{eff}$ (cm)', fontsize=fnt)
 plt.ylabel('Mean Energy (MeV)', fontsize=fnt)
 plt.title('Alpha Particle Energy', fontsize=fnt+2)
 
+plt.legend()
 plt.grid(b=True)
-plt.show()
-#plt.savefig('alph_energy.png')
+#plt.show()
+plt.savefig('alph_energy.png')
 plt.close()
-'''
 
 ### Plot Stopping Power ###
-plt.plot(Deff_new, stop_pwr)
-plt.scatter(Deff, stp_pwr_intp(Deff), linestyle='None')
 
-plt.xlabel(r'Effective Distance $(cm)$', fontsize=fnt)
+plt.plot(Eng_new, stop_pwr, color='k')
+plt.errorbar(avg_eng, stp_pwr_intp(avg_eng), yerr=stp_err, color='k', marker='o', linestyle='None')
+plt.scatter([eng_MR], [stp_MR], c='r', s=150, marker='*', label='( %.2f MeV, %.2f MeV/cm)' % (eng_MR, stp_MR))
+
+plt.xlabel(r'Mean Energy $(MeV)$', fontsize=fnt)
 plt.ylabel(r'$\langle - \frac{dE}{dx} \rangle \ (MeV/cm)$', fontsize=fnt)
 plt.title('Stopping Power', fontsize=fnt+2)
 
+plt.legend()
 plt.grid()
-plt.show()
-#plt.savefig('stop_pwr.png')
+#plt.show()
+plt.savefig('stop_pwr.png')
 plt.close()
 
 ### Plot Peak Counts ###
-'''
-plt.plot([0, 4], [stop_Ceff, stop_Ceff], c='b', ls='--', label=r'$50\%$ Count Rate = '+r'(%.1f $\pm$ %.1f) $s^{-1}$' % (stop_Ceff, Cerr_tot))
+
+plt.plot([0, 4], [stop_Ceff, stop_Ceff], c='b', ls='--', label=r'$50\%$ Count Rate = '+r'(%.1f $\pm$ %.1f) $s^{-1}$' % (stop_Ceff, stop_Ceff_err))
 plt.plot([stop_Deff, stop_Deff], [0, 10], c='r', ls='--', label=r'Mean Range = '+r'(%.2f $\pm$ %.2f) $cm$' % (stop_Deff, stop_Deff_err))
+plt.scatter([Deff_MR], [9.1], c='r', s=150, marker='*', label=r'$d_{eff}^{*}$')
 
 plt.fill_between([0, 4], [stop_Ceff+stop_Ceff_err, stop_Ceff+stop_Ceff_err], [stop_Ceff-stop_Ceff_err, stop_Ceff-stop_Ceff_err], color='lightsteelblue')
 plt.fill_between([stop_Deff-stop_Deff_err, stop_Deff+stop_Deff_err], [10, 10], [0, 0], color='salmon')
 plt.errorbar(Deff, Crat, xerr=Derr, yerr=Cerr, c='k')
 
 plt.ylabel('Count Rate (#/s)', fontsize=fnt)
-plt.xlabel('Effective Distance (cm)', fontsize=fnt)
+plt.xlabel(r'$d_{eff}$ (cm)', fontsize=fnt)
 plt.title('Alpha Decay Counts', fontsize=fnt+2)
 
 plt.grid(b=True)
@@ -172,4 +207,3 @@ plt.legend()
 #plt.show()
 plt.savefig('alf_peak_cnts.png')
 plt.close()
-'''
