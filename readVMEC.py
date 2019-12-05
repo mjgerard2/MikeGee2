@@ -506,7 +506,7 @@ class readVMEC:
         h5.close()
 
 dirc_name = os.getcwd()
-file_name = os.path.join(dirc_name, 'wout_QHS_Rstart_1_513_32polmodes_18x24_axis_v2.nc')
+file_name = os.path.join(dirc_name, 'wout_HSX_test_opt0.nc')
 
 vmec_data = readVMEC(file_name)
-vmec_data.save_Bfield_Cyldrical(dirc_name)
+vmec_data.save_Sval_Polar(dirc_name)

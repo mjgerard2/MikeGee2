@@ -38,7 +38,7 @@ class spectra():
         lines = f.readlines()
         
         self.elt = extNum(lines[4], 3)
-        npts = 6000#int(extNum(lines[5], 2))
+        npts = int(extNum(lines[5], 2))
         
         self.fit_a = extNum(lines[6], 5)
         self.fit_b = extNum(lines[7], 5)
@@ -90,6 +90,44 @@ class spectra():
         
         plt.grid()
         plt.legend()
+        if save:
+            plt.savefig(name)
+        else:
+            plt.show()
+        plt.close()
+        
+    def samp(self, peaks, save=False, name='None'):
+        fnt=14
+        eng = parabFit(self.chan, self.fit_c, self.fit_b, self.fit_a)
+        
+        plt.plot(eng, self.sign, c='k')
+        
+        hand = []
+        for key in peaks:
+            dat = peaks[key]
+            clr = dat[0]#np.random.rand(3,)
+            for d in dat[1::]:
+                plt.plot([d[0], d[0]], [0, d[1]], ls='--', c=clr)
+            
+            l = len(dat)
+            if l == 2:
+                lab = key + ': {} keV'.format(dat[1][0])
+            elif l == 3:
+                lab = key + ': ({0}, {1}) keV'.format(dat[1][0], dat[2][0])
+            elif l == 4:
+                lab = key + ': ({0}, {1}, {2}) keV'.format(dat[1][0], dat[2][0], dat[3][0])
+            elif l == 5:
+                lab = key + ': ({0}, {1}, {2}, {3}) keV'.format(dat[1][0], dat[2][0], dat[3][0], dat[4][0])
+
+            hand.append(mlines.Line2D([], [], c=clr, ls='--', label=lab))
+        
+        plt.xlabel('Energy (keV)', fontsize=fnt)
+        plt.ylabel('Counts (#/s)', fontsize=fnt)
+        plt.title(self.spc, fontsize=fnt+2)
+        
+        plt.grid()
+        plt.legend(handles=hand, loc='upper right')#, bbox_to_anchor=(1.0, .9))
+        #plt.tight_layout()
         if save:
             plt.savefig(name)
         else:
@@ -274,11 +312,12 @@ class spectra():
                 plt.show()
             plt.close()
         
+pas = 'samp_7'
 
-loc = 'montana_soil.ASC'
-spec = spectra(loc, spc='Montana Soil')
+loc = 'S2_spect.ASC'
+spec = spectra(loc, spc= 'S2')
 
-spec.fullSpec(save=False, name='samp_2.png')
+spec.fullSpec(save=False, name='S2.png')
 
 # Sample 1 (Gallium)
 '''
@@ -340,7 +379,69 @@ peaks = [[74, .14],
          [510, .24],
          [810, .655]]
 '''
-#spec.peak_id(peaks, save=True, name='samp_1.png')
+# Montana Soil
+'''
+peaks = {'Sm' : [[41.67, 10]],
+         'W' : [[69.21, 1.8]],
+         'U' : [[103.5, 6.9]],
+         'Ti' : [[159.8, .7]],
+         'Th' : [[311.6, .9]],
+         'Yb' : [[396, 1]],
+         'Sb' : [[602.6, 1]],
+         'Sc' : [[888.4, 5],
+                 [1120, 5]],
+         'Ni' : [[1291.7, 5]],
+         'Na' : [[1369.1, 5],
+                 [2768.5, 5]],
+         'La' : [[1597.9, 5],
+                 [486.3, 5],
+                 [814.8, 5],
+                 [328.3, 1.2]]
+         }
+'''
+'''
+peaks = {'Sm' : ['tab:blue',
+                 [41.67, 10]],
+         'W' : ['tab:orange',
+                [69.21, 10]],
+         'U' : ['tab:green',
+                [103.5, 10]],
+         'Ti' : ['tab:red',
+                 [159.8, 10]],
+         'Th' : ['tab:purple',
+                 [311.6, 10]],
+         'Yb' : ['tab:brown',
+                 [396, 10]],
+         'Sb' : ['tab:pink',
+                 [602.6, 10]],
+         'Sc' : ['tab:gray',
+                 [888.4, 10],
+                 [1120, 10]],
+         'Ni' : ['tab:olive',
+                 [1291.7, 10]],
+         'Na' : ['tab:cyan',
+                 [1369.1, 10],
+                 [2768.5, 10]],
+         'La' : ['maroon',
+                 [1597.9, 10],
+                 [486.3, 10],
+                 [814.8, 10],
+                 [328.3, 10]]
+         }
+'''
+
+# S2
+
+peaks = {'Au' : ['tab:blue',
+                 [411.2, .3]],
+         'Br' : ['tab:orange',
+                [553.5, .3],
+                [776.5, .3]],
+         'Na' : ['tab:green',
+                [1369, .3],
+                [2768.6, .2]]
+         }
+spec.samp(peaks, save=True, name='S2.png')
 
 #spec.left_min(1210, 1250, plot=True)
 #spec.right_min(1350, 1400, plot=True)

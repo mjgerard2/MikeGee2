@@ -1,6 +1,6 @@
 #!/bin/sh
 
-for i in {0..728}
+for i in {0..14895}
 do
     cd job_$i
     mpiexec -n 4 --allow-run-as-root ~/bin/xstelloptv2 input.HSX_test
