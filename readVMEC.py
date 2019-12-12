@@ -57,8 +57,7 @@ class readVMEC:
         self.v_dom = np.linspace(0, .5*np.pi, self.v_num)
         
     def polarCoord(self):
-        """
-        Produces the cylindrical coordinates of magnetic flux surfaces, 
+        """ Produces the cylindrical coordinates of magnetic flux surfaces, 
         indexed by VMEC flux coordinates [s,v,u].
         """
         pol, tor = np.meshgrid(self.u_dom, self.v_dom)
@@ -142,8 +141,7 @@ class readVMEC:
             self.s_surf[0::, v_ind, 0::] = s_temp_intp
             
     def fluxSurf_Polar(self, r_res=0.001, p_res=1., z_res=0.001):
-        """
-        Produce a 3D array of flux surface s values, indexed in polar coordinates [r,p,z]
+        """ Produce a 3D array of flux surface s values, indexed in polar coordinates [r,p,z]
         
         Parameters
         ------------------------------------------------------------------------
@@ -205,8 +203,7 @@ class readVMEC:
             self.R_coord[:,p,:]
             
     def fluxSurf_Cartesian(self, res=0.005):
-        """
-        Produce a 3D array of flux surface s values, indexed in cartesian coordinates [x,y,z]
+        """ Produce a 3D array of flux surface s values, indexed in cartesian coordinates [x,y,z]
         
         Parameters
         ------------------------------------------------------------------------
@@ -258,8 +255,7 @@ class readVMEC:
         self.s_surf_cart = griddata((x_grid_mask, y_grid_mask, z_grid_mask), s_surf_mask, (x_grid, y_grid, z_grid))
         
     def fluxCoord_Bfield(self):
-        """
-        Produces the magnetic field in real space in cylindrical coordinates, 
+        """ Produces the magnetic field in real space in cylindrical coordinates, 
         indexed by VMEC flux coordinates [s,v,u].        
         """
         try:
@@ -282,9 +278,8 @@ class readVMEC:
         Bz_coord = Bu_coord * self.dZu_coord
         self.B_flux = np.stack((Br_coord, Bv_coord, Bz_coord), axis=3)
         
-    def cylndCoord_Bfield(self, r_res=0.005, z_res=0.005):
-        """
-        Interpolates the magnetic field in real space in cylindrical coordinates, 
+    def cylndCoord_Bfield(self, r_res=0.001, z_res=0.001):
+        """ Interpolates the magnetic field in real space in cylindrical coordinates, 
         indexed by the cylindrical domain [r,theta,z].        
         
         Parameters
@@ -309,9 +304,8 @@ class readVMEC:
         z_max = np.max(self.Z_coord)
         z_num = int((z_max - z_min) / z_res)
         self.z_dom = np.linspace(z_min, z_max, z_num)
-        
-        self.B_cyld = np.empty((r_num, self.v_num, z_num, 3))
-        
+
+        self.B_cyld = np.full((r_num, self.v_num, z_num, 3), np.nan)
         for v in range(self.v_num):
             r = self.R_coord[0,v,0]
             z = self.Z_coord[0,v,0]
@@ -353,7 +347,7 @@ class readVMEC:
             Bz = griddata((r_grd_mask, z_grd_mask), Bz_mask, (r_grd, z_grd))  
             
             self.B_cyld[0::, v, 0::] = np.stack((Br, Bv, Bz), axis=2)
-    
+        
     def plot_fluxSurf(self, dirc, tor=0):
         """
         Plots a selection of flux surfaces in real space across a toroidal plane
@@ -428,6 +422,45 @@ class readVMEC:
         axs.set_title(r'$\theta$ = %.1f$^{\circ}$' % (self.v_dom[v_ind]*57.29577951), fontsize=fnt+2)
         
         plt.savefig( os.path.join( loc, 'S_Map_V_{}.png'.format( int( self.v_dom[v_ind]*57.29577951 ) ) ) )
+        plt.close()
+        
+    def plot_Bfield(self, loc, v):
+        """ Plots poloidal cross sections of the magnetic field.
+        
+        Parameters
+        ------------------------------------------------------------------------
+        loc : str
+            Directory in which png will be saved
+            
+        v : int
+            Toroidal angle of cross section
+        """
+        try:
+            self.B_cyld
+        except:
+            self.cylndCoord_Bfield()
+            
+        fnt=14
+        v_ind = find_nearest(self.v_dom, v)
+        
+        B_norm = np.linalg.norm(self.B_cyld[0::, v_ind, 0::].T, axis=0)
+        B_flux_norm = np.linalg.norm(self.B_flux[1::, 0::, 0::], axis=3)
+        
+        B_min = np.min(B_flux_norm)
+        B_max = np.max(B_flux_norm)
+        
+        fig, axs = plt.subplots(1)
+        s_map = axs.pcolormesh(self.r_dom, self.z_dom, B_norm, vmin=B_min, vmax=B_max, cmap=plt.get_cmap('jet'))
+        
+        cbar = fig.colorbar(s_map, ax=axs)
+        cbar.ax.set_ylabel(r'$|\mathbf{B}|$', fontsize=fnt, rotation=0)
+        
+        axs.set_xlabel('r (m)', fontsize=fnt)
+        axs.set_ylabel('z (m)', fontsize=fnt)
+        
+        axs.set_title(r'$\theta$ = %.1f$^{\circ}$' % (self.v_dom[v_ind]*57.29577951), fontsize=fnt+2)
+        
+        plt.savefig( os.path.join( loc, 'B_field_V_{}.png'.format( int( self.v_dom[v_ind]*57.29577951 ) ) ) )
         plt.close()
         
     def save_Sval_Polar(self, loc):
@@ -508,5 +541,14 @@ class readVMEC:
 dirc_name = os.getcwd()
 file_name = os.path.join(dirc_name, 'wout_HSX_test_opt0.nc')
 
+fig_dirc = os.path.join(dirc_name, 'Figures')
+
 vmec_data = readVMEC(file_name)
-vmec_data.save_Sval_Polar(dirc_name)
+vmec_data.save_Bfield_Cyldrical(dirc_name)
+'''
+v_lst = np.linspace(0, np.pi/2, vmec_data.v_num)
+for v in v_lst:
+    vmec_data.plot_Bfield(fig_dirc, v)
+
+#vmec_data.cylndCoord_Bfield()
+'''

@@ -35,8 +35,7 @@ class s_func_cyln():
         h5.close()
         
     def plot_torCS(self, loc, p):
-        """
-        Plot S surfaces along toroidal cross section and save as png
+        """ Plot S surfaces along toroidal cross section and save as png
         
         Parameters
         -----------------------------------------------------------------------
@@ -64,8 +63,7 @@ class s_func_cyln():
         plt.close()
         
     def plot_fluxSurf_3D(self, loc):
-        """
-        Plot S sourface contours along entire toroidal domain and save as png
+        """ Plot S sourface contours along entire toroidal domain and save as png
         
         Parameters
         -----------------------------------------------------------------------
