@@ -11,29 +11,30 @@ import h5py as hf
 
 import os
 
-dirc = os.getcwd()
-dirc_lst = os.listdir(dirc)
-new_name = os.path.join(dirc, 'current_data.h5')
+cwd = os.getcwd()
+name = os.path.join(cwd, 'current_data.h5')
 
-jobs = 729
-crnt_profile = np.empty((jobs, 6))
-eps_profile = np.empty((jobs, 127))
+job_dirc = os.path.join(cwd, 'jobs')
+dirc_lst = os.listdir(job_dirc)
 
-cnt = 0
-for job in dirc_lst:
-    if job[0:3] == 'job':
-        sub = os.path.join(dirc, job)
-        name_neo = os.path.join(sub, 'neo_out.HSX_test.00000')
-        name_cur = os.path.join(sub, 'input.HSX_test')
+jobs = len(dirc_lst)
+
+crnt_profile = np.full((jobs, 6), np.nan)
+eps_profile = np.full((jobs, 127), np.nan)
+for j, job in enumerate(dirc_lst):
+    sub = os.path.join(job_dirc, job)
+    name_neo = os.path.join(sub, 'neo_out.HSX_test.00000')
+    name_cur = os.path.join(sub, 'input.HSX_test')
+    
+    f = open(name_cur, 'r')
+    lines = f.readlines()
+    f.close()
+
+    crnt = lines[22]
+    crnt = crnt.strip()
+    crnt = crnt.split()
         
-        f = open(name_cur, 'r')
-        lines = f.readlines()
-        f.close()
-        
-        crnt = lines[22]
-        crnt = crnt.strip()
-        crnt = crnt.split()
-        
+    try:
         f = open(name_neo, 'r')
         lines = f.readlines()
         f.close()
@@ -44,14 +45,31 @@ for job in dirc_lst:
             line = line.split()
             neo[ind] = line[1]
         
-        crnt_profile[cnt] = crnt[3::]
-        eps_profile[cnt] = neo
+        crnt_profile[j] = crnt[3::]
+        eps_profile[j] = neo
         
-        cnt+=1
+    except:
+        print('{0}, {1}, {2}, {3}, {4}, {5}'.format(*crnt[3::]))
+        
+crnt_profile = crnt_profile[~np.isnan(crnt_profile)]
+eps_profile = eps_profile[~np.isnan(eps_profile)]
 
-h5 = hf.File(new_name, 'w')
+crnt_profile = crnt_profile.reshape(int(len(crnt_profile) / 6), 6)
+eps_profile = eps_profile.reshape(int(len(eps_profile) / 127), 127)
+
+h5 = hf.File(name, 'r')
         
-h5.create_dataset('current profile', data=crnt_profile)
-h5.create_dataset('epsilon profile', data=eps_profile)
+crnt_old = h5['current profile'][:]
+eps_old = h5['epsilon profile'][:]
+
+h5.close()
+
+crnt_new = np.append(crnt_old, crnt_profile).reshape(len(crnt_old)+len(crnt_profile), 6)
+eps_new = np.append(eps_old, eps_profile).reshape(len(eps_old)+len(eps_profile), 127)
+        
+h5 = hf.File(name, 'w')
+        
+h5.create_dataset('current profile', data=crnt_new)
+h5.create_dataset('epsilon profile', data=eps_new)
 
 h5.close()
