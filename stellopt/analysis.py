@@ -10,6 +10,8 @@ from matplotlib import animation as an
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 
+from mpl_toolkits.mplot3d import Axes3D
+
 import numpy as np
 import h5py as hf
 
@@ -149,7 +151,7 @@ class data():
         plt.plot(self.s_dom, qhs_profile, ls='--', c='k', label='QHS')
         
         for i in range(8):
-            idx = self.jobs - (1 + i)
+            idx = i#self.jobs - (1 + i)
             crnts = -6.25e-6 * self.crt_profile[idx]
             plt.plot(self.s_dom, self.eps_profile[idx], label='(%.2f, %.2f, %.2f, %.2f, %.2f, %.2f)' % (crnts[0], crnts[1], crnts[2], crnts[3], crnts[4], crnts[5]))
         
@@ -167,6 +169,22 @@ class data():
                 
         self.eps_min = int((ind_min - (ind_min % 26)) / 26)
         self.eps_max = int((ind_max - (ind_max % 26)) / 26)
+        
+    def qhs_extrema(self):
+        """ Find the index of the epsilon effective profile whose percent comaprison
+        with the qhs configuration is the smallest.
+        """
+        self.find_crnt_profile(np.zeros(6))
+        qhs_profile = self.eps_profile[self.base_idx]
+        qhs_profile_inv = 1. / qhs_profile
+        
+        compare = np.empty((self.jobs, 2))
+        for ind, eps in enumerate(self.eps_profile):
+            compare[ind] = [np.mean((eps - qhs_profile) * qhs_profile_inv), ind]
+            
+        compare = np.array( sorted(compare, key=lambda x: x[0]) )
+        
+        self.qhs_min = int(compare[0,1])
                 
     def find_config(self, idx):
         """ Finds current configuration for a particular job in the ordered
@@ -194,13 +212,14 @@ class data():
             name of plot generated
         """
         self.find_crnt_profile(np.zeros(6))
-        qhs_profile = self.eps_profile[self.base_idx][0:26]
+        qhs_profile = self.eps_profile[self.base_idx]#[0:26]
+        qhs_profile_inv = 1. / qhs_profile
         
         compare = np.empty(self.jobs)
-        for ind, eps in enumerate(self.eps_profile[0::, 0:26]):
-            compare[ind] = np.mean((eps - qhs_profile) / qhs_profile)
+        for ind, eps in enumerate(self.eps_profile):#[0::, 0:26]):
+            compare[ind] = np.mean((eps - qhs_profile) * qhs_profile_inv)
         
-        qhs_diff = np.sort(compare)
+        qhs_diff = np.sort(compare)        
         qhs_diff = qhs_diff[qhs_diff < 1]
         x_dom = np.arange(len(qhs_diff))
                 
@@ -350,110 +369,188 @@ class data():
             
             plt.close()
         
-    def crnt_profile_prams(self):
-        """ Calculate the mirror value, inversion value and entropy of all
-        current configurations, as well as average and std of the epsilon
-        effective profiles.
+    def crnt_profile_prams_3D(self, pts=1000):
+        tst = np.empty(pts)
+        inv = np.empty(pts)
+        mrr = np.empty(pts)
         
-        Very Much so In Devolopment
-        """
-        eps_pram = {}     
-        for idx, crt in enumerate(self.crt_profile):
-            crt_evn = np.array([crt[0], crt[2], crt[4]])
-            crt_odd = np.array([crt[5], crt[3], crt[1]])
+        for idx, crt in enumerate(self.crt_profile[0:pts]):
+            inv_evn = np.array([crt[0], crt[2], crt[4]])
+            inv_odd = np.array([crt[5], crt[1], crt[3]])
             
-            inv = int(np.sum((crt_evn - crt_odd)**2 / 16e6))
-            mrr = int(np.sum((crt[0:3] - crt[3::])**2 / 16e6))
+            tst_evn = np.array([crt[1], crt[4], crt[5]])
+            tst_odd = np.array([crt[0], crt[2], crt[4]])
             
-            key = '{0}-{1}'.format(mrr, inv)
-            if key in eps_pram:
-                eps_pram[key] = np.append(eps_pram[key], self.eps_profile[idx])#[0:26])
+            tst[idx] = int(np.sum((tst_evn - tst_odd)**2 / 16e6))
+            inv[idx] = int(np.sum((inv_evn - inv_odd)**2 / 16e6))
+            mrr[idx] = int(np.sum((crt[0:3] - crt[3::])**2 / 16e6))
+            
+        fnt=14
+        cm = plt.cm.get_cmap('jet')
+        fig = plt.figure()
+        axs = fig.add_subplot(111, projection='3d')
+        
+        axs.set_xlim(0, 200)
+        axs.set_ylim(0, 200)
+        axs.set_zlim(0, 200)
+        
+        axs.set_xlabel('Mirror Value', fontsize=fnt)
+        axs.set_ylabel('Inversion Value', fontsize=fnt)
+        
+        #axs.set_yscale('log')
+        #axs.set_xscale('log')
+        
+        mrr_inv = {}
+        for i in range(pts):
+            key = '{0} {1} {2}'.format(mrr[i], inv[i], tst[i])
+            if key in mrr_inv:
+                mrr_inv[key]+=1
             else:
-                eps_pram[key] = self.eps_profile[idx]#[0:26]
-        '''      
-        clr = ['tab:blue', 'tab:green', 'tab:red', 'tab:orange', 'tab:cyan', 'tab:purple', 'tab:olive']
-        for et in range(6):
-            plt.yscale('log')
-            eps_avg = []
-            eps_err = []
-            dom = []
-            for mriv in range(192):
-                key = '{0}-{1}-{1}'.format(et+1, mriv)
-                if key in eps_pram:
-                    eps_avg = np.append(eps_avg, np.mean(eps_pram[key]))
-                    eps_err = np.append(eps_err, np.std(eps_pram[key]))
-                    dom = np.append(dom, mriv)
-            
-            plt.scatter(dom, eps_avg, c=clr[et], s=3)
-            
-        plt.savefig('Center_line.png')
-        plt.close()
-        '''
-        eps_pro = self.eps_profile[0]
-        eps_pro_inv = 1. / self.eps_profile[0]
+                mrr_inv[key]=1
         
-        eps_avg = np.ones((192, 192))
-        eps_std = np.ones((192, 192))
-        for mr in range(192):
-            for iv in range(192):
-                key = '{0}-{1}'.format(mr, iv)
-                if key in eps_pram:
-                    js = int( len(eps_pram[key]) / 127 )
-                    eps_pros = eps_pram[key].reshape(js, 127)
-                    eps_diff = np.empty(js)
-                    for i in range(js):
-                        eps_diff[i] = np.mean( np.abs(eps_pro - eps_pros[i]) * eps_pro_inv * 100) #np.mean(eps_pram[key])
+        mrr_seg = []
+        inv_seg = []
+        tst_seg = []
+        cnts = []
+        for key in mrr_inv:
+            key_spt = key.split()
+            mrr_seg.append( float(key_spt[0]) )
+            inv_seg.append( float(key_spt[1]) )
+            tst_seg.append( float(key_spt[2]) )
+            
+            cnts.append(float(mrr_inv[key]))
+        
+        ax = axs.scatter(mrr_seg, inv_seg, tst_seg, c=cnts, s=1, marker='X', norm=LogNorm(vmin=1, vmax=68), cmap=cm)
+        fig.colorbar(ax)
+        
+        axs.view_init(0, 270)
+        
+        if pts==self.jobs:
+            plt.savefig('crnt_pram.png')
+        else:
+            plt.savefig('crnt_pram3D_{}.png'.format(pts))
+        plt.close()
+    
+    def crnt_profile_prams(self, pts=1000):
+        inv = np.empty(pts)
+        mrr = np.empty(pts)
+        
+        for idx, crt in enumerate(self.crt_profile[0:pts]):
+            inv_evn = np.array([crt[0], crt[2], crt[4]])
+            inv_odd = np.array([crt[5], crt[1], crt[3]])
+            
+            inv[idx] = int(np.sum((inv_evn - inv_odd)**2 / 16e6))
+            mrr[idx] = int(np.sum((crt[0:3] - crt[3::])**2 / 16e6))
+            
+        fnt=14
+        cm = plt.cm.get_cmap('jet')
+        fig, axs = plt.subplots(1, 1)
+        
+        axs.set_xlim(0, 200)
+        axs.set_ylim(0, 200)
+        
+        axs.set_xlabel('Mirror Value', fontsize=fnt)
+        axs.set_ylabel('Inversion Value', fontsize=fnt)
+        
+        #axs.set_yscale('log')
+        #axs.set_xscale('log')
+        
+        mrr_inv = {}
+        for i in range(pts):
+            key = '{0} {1}'.format(mrr[i], inv[i])
+            if key in mrr_inv:
+                mrr_inv[key]+=1
+            else:
+                mrr_inv[key]=1
+        
+        mrr_seg = np.array([])
+        inv_seg = np.array([])
+        cnts = np.array([])
+        for key in mrr_inv:
+            key_spt = key.split()            
+            mrr_seg = np.append(mrr_seg, float(key_spt[0]))
+            inv_seg = np.append(inv_seg, float(key_spt[1]))
+
+            cnts = np.append(cnts, float(mrr_inv[key]))
+        
+        net_cnts_inv = 1. / np.sum(cnts)
+        mrr_cen = net_cnts_inv * np.sum(mrr_seg * cnts)
+        inv_cen = net_cnts_inv * np.sum(inv_seg * cnts)
+                
+        ax = axs.scatter(mrr_seg, inv_seg, c=cnts, s=1, norm=LogNorm(vmin=1, vmax=1144), cmap=cm)
+        axs.scatter(36.05569212584262, 36.04722952659123, c='k', s=50, marker='X')
+        axs.scatter(mrr_cen, inv_cen, c='tab:red', s=50, marker='X')
+        fig.colorbar(ax)
+                
+        if pts==self.jobs:
+            plt.savefig('crnt_pram.png')
+        else:
+            plt.savefig('crnt_pram_{}.png'.format(pts))
+        plt.close()
+    
+    def animate_crnt_profile_prams(self, pts=1000):
+        inv = np.empty(pts)
+        mrr = np.empty(pts)
+        
+        for idx, crt in enumerate(self.crt_profile[0:pts]):
+            crt_evn = np.array([crt[0], crt[2], crt[4]])
+            crt_odd = np.array([crt[5], crt[1], crt[3]])
+            
+            inv[idx] = int(np.sum((crt_evn - crt_odd)**2 / 16e6))
+            mrr[idx] = int(np.sum((crt[0:3] - crt[3::])**2 / 16e6))
+            
+        fnt=14
+        cm = plt.cm.get_cmap('jet')
+        fig, axs = plt.subplots(1, 1)
+        
+        axs.set_xlim(0, 200)
+        axs.set_ylim(0, 200)
+        
+        axs.set_xlabel('Mirror Value', fontsize=fnt)
+        axs.set_ylabel('Inversion Value', fontsize=fnt)
+        
+        #axs.set_yscale('log')
+        #axs.set_xscale('log')
+        
+        artist = []
+        segs = np.linspace(1, pts, 750, dtype=int)
+        for s in segs:
+            mrr_inv = {}
+            for i in range(s):
+                key = '{0} {1}'.format(mrr[i], inv[i])
+                if key in mrr_inv:
+                    mrr_inv[key]+=1
+                else:
+                    mrr_inv[key]=1
+            
+            mrr_seg = np.array([])
+            inv_seg = np.array([])
+            cnts = np.array([])
+            for key in mrr_inv:
+                key_spt = key.split()
+                mrr_seg = np.append(mrr_seg, float(key_spt[0]))
+                inv_seg = np.append(inv_seg, float(key_spt[1]))
+    
+                cnts = np.append(cnts, float(mrr_inv[key]))
                     
-                    eps_avg[mr,iv] = np.mean(eps_diff)
-                    eps_std[mr,iv] = np.std(eps_diff)
-                        
-        ### Color Map ###
-        fnt = 14
-        fig, axs = plt.subplots()
-        '''
-        axs.set_xlabel('Mirror Value', fontsize=fnt)
-        axs.set_ylabel('Inversion Value', fontsize=fnt)
+            net_cnts_inv = 1. / np.sum(cnts)
+            mrr_cen = net_cnts_inv * np.sum(mrr_seg * cnts)
+            inv_cen = net_cnts_inv * np.sum(inv_seg * cnts)
+                
+            ax = axs.scatter(mrr_seg, inv_seg, c=cnts, s=1, marker='X', norm=LogNorm(vmin=1, vmax=1144), cmap=cm)
+            pt = axs.scatter(mrr_cen, inv_cen, c='tab:red', s=50, marker='X')
+            artist.append([ax, pt,])
+            
+        fig.colorbar(ax)
+        axs.scatter(36.05569212584262, 36.04722952659123, c='k', s=50, marker='X')
         
-        s_map = axs.pcolormesh(np.arange(192), np.arange(192), eps_avg, norm=LogNorm(vmin=np.min(eps_avg), vmax=np.max(eps_avg)), cmap='jet')
-        cbar = fig.colorbar(s_map, ax=axs)
-        cbar.ax.set_ylabel(r'$\%$ Diff w/ QHS', fontsize=fnt)
+        ani = an.ArtistAnimation(fig, artist)
+        writer = an.FFMpegWriter(fps=25, codec='h264')
+        if pts == self.jobs:
+            ani.save('crnt_pram.mp4', writer=writer)
+        else:
+            ani.save('crnt_pram_{}.mp4'.format(pts), writer=writer)
         
-        #plt.show()
-        plt.savefig('QHS_diff.png')
-        plt.close()
-        
-        
-        
-        fig, axs = plt.subplots()
-        
-        axs.set_xlabel('Mirror Value', fontsize=fnt)
-        axs.set_ylabel('Inversion Value', fontsize=fnt)
-        
-        s_map = axs.pcolormesh(np.arange(192), np.arange(192), eps_std, norm=LogNorm(vmin=np.min(eps_std), vmax=np.max(eps_std)), cmap='jet')
-        cbar = fig.colorbar(s_map, ax=axs)
-        cbar.ax.set_ylabel(r'STD of $\%$ Diff w/ QHS', fontsize=fnt)
-        
-        #plt.show()
-        plt.savefig('QHS_diff_std.png')
-        plt.close()
-        '''
-        eps_diff = np.ones((192, 192))
-        for i in range(192):
-            for j in range(192):
-                if eps_avg[i,j] != 0:
-                    eps_diff[i,j] = (eps_avg[i,j] - eps_std[i,j]) / eps_avg[i,j]**2
-        
-        fig, axs = plt.subplots()
-        
-        axs.set_xlabel('Mirror Value', fontsize=fnt)
-        axs.set_ylabel('Inversion Value', fontsize=fnt)
-        
-        s_map = axs.pcolormesh(np.arange(192), np.arange(192), eps_diff, vmin=np.min(eps_diff), vmax=np.max(eps_diff), cmap='jet')
-        cbar = fig.colorbar(s_map, ax=axs)
-        cbar.ax.set_ylabel(r'Diff of STD of $\%$ Diff w/ Min', fontsize=fnt)
-        
-        #plt.show()
-        plt.savefig('Min_diff_diff.png')
         plt.close()
         
     def check_zero(self):
@@ -470,22 +567,30 @@ dirc = os.getcwd()
 name_og = os.path.join(dirc, 'current_data.h5')
 name_min = os.path.join(dirc, 'EpsOrder_MIN.h5')
 name_qhs = os.path.join(dirc, 'EpsOrder_QHS.h5')
-
-datum = data(name_og)
-
-#datum.plot_10('plot_10')
+name_dif = os.path.join(dirc, 'EpsOrder_DIFF.h5')
 '''
+datum = data(name_min)
+
+datum.plot_10('plot_10_dif')
+
+print('QHS Lowest Difference')
+datum.qhs_extrema()
+datum.eps_compare(init=datum.qhs_min)
+datum.save_order('EpsOrder_DIFF')
+
+
 print('Extrema Ordering')
 datum.eps_extrema()
 datum.eps_compare(init=datum.eps_min)
 datum.save_order('EpsOrder_MIN')
+
 
 print('QHS Ordering')
 datum.find_crnt_profile(np.zeros(6))
 datum.eps_compare(init=datum.base_idx)
 datum.save_order('EpsOrder_QHS')
 '''
-compare = 'Min'
+compare = 'Dif'
 
 if compare == 'QHS':
     anal_qhs = data(name_qhs)
@@ -505,3 +610,12 @@ elif compare == 'Min':
     #anal_min.plot_10('plot_10_max')
     #anal_min.still_search('Sig_Configs')
     anal_min.crnt_profile_prams()
+
+elif compare == 'Dif':
+    anal_dif = data(name_dif)
+    
+    anal_dif.animate_crnt_profile_prams(pts=3706)#anal_dif.jobs)
+    #for i in range(37):
+    #    anal_dif.crnt_profile_prams(pts=100*(i+1))
+    
+    #anal_dif.animate_crnt_profile_prams(pts=3706)

@@ -88,7 +88,7 @@ class readVMEC:
         
         self.s_dom = np.linspace(0, 1, self.ns)
         self.u_dom = np.linspace(0, 2*np.pi, self.u_num)
-        self.v_dom = np.linspace(0, .5*np.pi, self.v_num)
+        self.v_dom = np.linspace(0, 2*np.pi, self.v_num)
         
     def polarCoord(self):
         """ Produces the cylindrical coordinates of magnetic flux surfaces, 
@@ -386,7 +386,7 @@ class readVMEC:
             B_max = np.max(self.B_mod)
             B_show = self.B_mod[flx, 0::, 0::].T
             
-            title='Bmod_para_{}.png'.format(flx+1)
+            title='Bmod_para_{}_diff.png'.format(flx+1)
             label=r'$|\mathbf{B}|$'
         else:
             try:
@@ -552,6 +552,27 @@ class readVMEC:
         axs.set_title(r'$\theta$ = %.1f$^{\circ}$' % (self.v_dom[v_ind]*57.29577951), fontsize=fnt+2)
         
         plt.savefig( os.path.join( loc, 'B_field_V_{}.png'.format( int( self.v_dom[v_ind]*57.29577951 ) ) ) )
+        plt.close()
+      
+    ### Development Area ###
+    def curvature_calculation(self):
+        b_field = np.linalg.norm(self.B_field[-1,0::,0::], axis=2)
+        
+
+        fnt = 14
+        
+        fig, axs = plt.subplots(1)
+        s_map = axs.pcolormesh(self.v_dom, self.u_dom, B_show, vmin=B_min, vmax=B_max, cmap=plt.get_cmap('jet'))
+        
+        cbar = fig.colorbar(s_map, ax=axs)
+        cbar.ax.set_ylabel(label, fontsize=fnt, rotation=0)
+        
+        axs.set_xlabel(r'Tor', fontsize=fnt)
+        axs.set_ylabel(r'Pol', fontsize=fnt)
+        
+        axs.set_title(r'Flux Surface: {0} of 127'.format(flx+1), fontsize=fnt+2)
+        
+        plt.savefig( os.path.join( loc, title ) )
         plt.close()
         
     def plot_poloidal(self, loc, v):
@@ -721,6 +742,9 @@ fig_dirc = os.path.join(dirc_name, 'Figures')
 vmec_data = readVMEC(file_name)
 vmec_data.polarCoord()
 
+vmec_data.plot_3D_B()
+'''
 v_dom = np.linspace(0, .5*np.pi, 15)
 for v in v_dom:
     vmec_data.arc_leng(fig_dirc, v, 126)
+'''
