@@ -61,6 +61,8 @@ class readVMEC:
         self.mpol = rootgrp['/mpol'][0]
         self.ntor = rootgrp['/ntor'][0]
         
+        self.ns = rootgrp['/ns'][0]
+        
         self.xm = rootgrp['/xm'][:]
         self.xn = rootgrp['/xn'][:]
         self.md = len(self.xm)
@@ -73,18 +75,20 @@ class readVMEC:
         self.zmns = rootgrp['/zmns'][:,:]
         self.lmns = rootgrp['/lmns'][:,:]
         
+        ds = 1. / (self.ns-1)
+        self.Drmnc = np.gradient(self.rmnc, ds, axis=0)
+        self.Dzmns = np.gradient(self.zmns, ds, axis=0)
+        
         self.bumnc = rootgrp['/bsubumnc'][:,:]
         self.bvmnc = rootgrp['/bsubvmnc'][:,:]
         self.bsmns = rootgrp['/bsubsmns'][:,:]
         self.bmnc = rootgrp['/bmnc'][:,:]
-                    
-        self.ns = rootgrp['/ns'][0]
         
         rootgrp.close()
         
-        mult = 40
+        mult = 15
         self.u_num = self.mpol * mult
-        self.v_num = self.ntor * mult
+        self.v_num = self.ntor * mult * 4 
         
         self.s_dom = np.linspace(0, 1, self.ns)
         self.u_dom = np.linspace(0, 2*np.pi, self.u_num)
@@ -105,24 +109,20 @@ class readVMEC:
         sin_pol = np.sin(pol_xm)
         sin_tor = np.sin(tor_xn)
         
-        self.cos_mu_nv = cos_pol*cos_tor + sin_pol*sin_tor
-        self.sin_mu_nv = sin_pol*cos_tor - sin_tor*cos_pol
+        cos_mu_nv = cos_pol*cos_tor + sin_pol*sin_tor
+        sin_mu_nv = sin_pol*cos_tor - sin_tor*cos_pol
+
+        self.R_coord = np.dot(self.rmnc, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.Z_coord = np.dot(self.zmns, sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
         
-        self.R_coord = np.dot(self.rmnc, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        self.Z_coord = np.dot(self.zmns, self.sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.dRu_coord = np.dot(-self.rmnc*self.xm, sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.dRv_coord = np.dot(self.rmnc*self.xn, sin_mu_nv).reshape(self.ns, self.v_num, self.u_num) 
         
-        self.dRu_coord = np.dot(-self.rmnc*self.xm, self.sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        self.dRv_coord = np.dot(self.rmnc*self.xn, self.sin_mu_nv).reshape(self.ns, self.v_num, self.u_num) 
+        self.dZu_coord = np.dot(self.zmns*self.xm, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.dZv_coord = np.dot(-self.zmns*self.xn, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num) 
         
-        self.dZu_coord = np.dot(self.zmns*self.xm, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        self.dZv_coord = np.dot(-self.zmns*self.xn, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num) 
-        
-        ds = self.s_dom[1] - self.s_dom[0]
-        dr = np.gradient(self.rmnc, ds, axis=0)
-        dz = np.gradient(self.zmns, ds, axis=0)
-        
-        self.dRs_coord = np.dot(dr, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        self.dZs_coord = np.dot(dz, self.sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.dRs_coord = np.dot(self.Drmnc, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.dZs_coord = np.dot(self.Dzmns, sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
         
     def polarCoord_Bfield(self):
         """ Produces the magnetic field in real space in cylindrical coordinates, 
@@ -132,10 +132,24 @@ class readVMEC:
             self.dRu_coord
         except:
             self.polarCoord()
+            
+        pol, tor = np.meshgrid(self.u_dom, self.v_dom)
+        
+        pol_xm = np.dot(self.xm_nyq.reshape(self.md_nyq, 1), pol.reshape(1, self.v_num * self.u_num))
+        tor_xn = np.dot(self.xn_nyq.reshape(self.md_nyq, 1), tor.reshape(1, self.v_num * self.u_num))
+        
+        cos_pol = np.cos(pol_xm)
+        cos_tor = np.cos(tor_xn)
 
-        Bs_coord = np.dot(self.bsmns, self.sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        Bu_coord = np.dot(self.bumnc, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
-        Bv_coord = np.dot(self.bvmnc, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        sin_pol = np.sin(pol_xm)
+        sin_tor = np.sin(tor_xn)
+        
+        cos_mu_nv = cos_pol*cos_tor + sin_pol*sin_tor
+        sin_mu_nv = sin_pol*cos_tor - sin_tor*cos_pol
+
+        Bs_coord = np.dot(self.bsmns, sin_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        Bu_coord = np.dot(self.bumnc, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        Bv_coord = np.dot(self.bvmnc, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
         
         B_norm = 1. / (self.dRs_coord * self.dZu_coord - self.dRu_coord * self.dZs_coord)
         Br_coord = (self.dZu_coord * Bs_coord - self.dZs_coord * Bu_coord) * B_norm 
@@ -148,12 +162,14 @@ class readVMEC:
         """ Calculate mod B in real space, indexed by VMEC flux 
         coordintes [s,v,u].
         """
-        try:
-            self.cos_mu_nv
-        except:
-            self.polarCoord()
+        pol, tor = np.meshgrid(self.u_dom, self.v_dom)
+        
+        pol_xm = np.dot(self.xm_nyq.reshape(self.md_nyq, 1), pol.reshape(1, self.v_num * self.u_num))
+        tor_xn = np.dot(self.xn_nyq.reshape(self.md_nyq, 1), tor.reshape(1, self.v_num * self.u_num))
+        
+        cos_mu_nv = np.cos(pol_xm)*np.cos(tor_xn) + np.sin(pol_xm)*np.sin(tor_xn)
             
-        self.B_mod = np.dot(self.bmnc, self.cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
+        self.B_mod = np.dot(self.bmnc, cos_mu_nv).reshape(self.ns, self.v_num, self.u_num)
         
     def fluxSurf(self, save=False, loc=os.getcwd(), r_res=0.001, z_res=0.001):
         """ Produce a 3D array of flux surface s values, indexed in cylindrical coordinates [r,p,z]
@@ -365,7 +381,7 @@ class readVMEC:
         plt.savefig( os.path.join( dirc, 'flux_tor_{}.png'.format( int( tor * (180/np.pi) ) ) ) )
         plt.close()
         
-    def paraPlot_B(self, loc, flx=126, mod=True, R=False, P=False, Z=False):
+    def paraPlot_B(self, loc, flx=127, mod=True, R=False, P=False, Z=False):
         """ Make Parametric plot of the magnetic field along a flux surface.
         
         Parameters
@@ -386,7 +402,7 @@ class readVMEC:
             B_max = np.max(self.B_mod)
             B_show = self.B_mod[flx, 0::, 0::].T
             
-            title='Bmod_para_{}_diff.png'.format(flx+1)
+            title='Bmod_para_{}.png'.format(flx+1)
             label=r'$|\mathbf{B}|$'
         else:
             try:
@@ -428,12 +444,12 @@ class readVMEC:
         axs.set_xlabel(r'Tor', fontsize=fnt)
         axs.set_ylabel(r'Pol', fontsize=fnt)
         
-        axs.set_title(r'Flux Surface: {0} of 127'.format(flx+1), fontsize=fnt+2)
+        axs.set_title(r'Flux Surface: {0} of 128'.format(flx+1), fontsize=fnt+2)
         
         plt.savefig( os.path.join( loc, title ) )
         plt.close()
         
-    def plot_3D_B(self, flx=126, mod=True, R=False, P=False, Z=False):
+    def plot_3D_B(self, flx=127, mod=True, R=False, P=False, Z=False):
         """ Plot a 3D flux surface showing mod B.
         
         Parameters
@@ -554,26 +570,9 @@ class readVMEC:
         plt.savefig( os.path.join( loc, 'B_field_V_{}.png'.format( int( self.v_dom[v_ind]*57.29577951 ) ) ) )
         plt.close()
       
-    ### Development Area ###
+    ### Development Area ###    
     def curvature_calculation(self):
         b_field = np.linalg.norm(self.B_field[-1,0::,0::], axis=2)
-        
-
-        fnt = 14
-        
-        fig, axs = plt.subplots(1)
-        s_map = axs.pcolormesh(self.v_dom, self.u_dom, B_show, vmin=B_min, vmax=B_max, cmap=plt.get_cmap('jet'))
-        
-        cbar = fig.colorbar(s_map, ax=axs)
-        cbar.ax.set_ylabel(label, fontsize=fnt, rotation=0)
-        
-        axs.set_xlabel(r'Tor', fontsize=fnt)
-        axs.set_ylabel(r'Pol', fontsize=fnt)
-        
-        axs.set_title(r'Flux Surface: {0} of 127'.format(flx+1), fontsize=fnt+2)
-        
-        plt.savefig( os.path.join( loc, title ) )
-        plt.close()
         
     def plot_poloidal(self, loc, v):
         fnt=14
@@ -590,10 +589,16 @@ class readVMEC:
         
         beta = (np.pi - np.arccos( ((r_ma**2 + r_pol**2) - r_lcfs**2) / (2 * r_ma * r_pol) ) ) * (180 / np.pi)
         
-        plt.plot(self.R_coord[-1, v_ind, 0::], self.Z_coord[-1, v_ind, 0::])
-        plt.plot([0,R_ma[0]], [0,R_ma[1]])
-        plt.plot([R_ma[0],R_lcfs[0]], [R_ma[1],R_lcfs[1]], ls='--')
-        plt.plot(self.R_coord[0::,v_ind,0], self.Z_coord[0::,v_ind,0])
+        u_hlf = int(.5*self.u_num)
+        plt.plot(self.R_coord[-1, v_ind, 0:(u_hlf+1)], self.Z_coord[-1, v_ind, 0:(u_hlf+1)])
+        plt.plot(self.R_coord[-1, v_ind, u_hlf::], self.Z_coord[-1, v_ind, u_hlf::], ls='--', c='tab:blue')
+        #plt.plot([0,R_ma[0]], [0,R_ma[1]])
+        #plt.plot([R_ma[0],R_lcfs[0]], [R_ma[1],R_lcfs[1]], ls='--')
+        for ind in np.arange(u_hlf):
+            plt.plot(self.R_coord[0::,v_ind,int(ind)], self.Z_coord[0::,v_ind,int(ind)], c='tab:blue')
+        
+        for ind in np.arange(u_hlf, self.u_num-1):
+            plt.plot(self.R_coord[0::,v_ind,ind], self.Z_coord[0::,v_ind,ind], c='tab:blue', ls='--')
         
         plt.xlim([self.R_coord.min(), self.R_coord.max()])   
         plt.ylim([self.Z_coord.min(), self.Z_coord.max()])   
@@ -735,16 +740,60 @@ class readVMEC:
         plt.savefig( os.path.join(loc, 'pol_{}.png'.format( int( self.v_dom[v_ind]*57.29577951 ) ) ) )
         plt.close()
         
+    def single(self, u, v, s):
+        s_ind = find_nearest(self.s_dom, s)
+        
+        pol_xm = self.xm.reshape(self.md, 1) * u
+        tor_xn = self.xn.reshape(self.md, 1) * v
+        
+        cos_mu_nv = np.cos(pol_xm - tor_xn)
+        sin_mu_nv = np.sin(pol_xm - tor_xn)
+
+        R = np.dot(self.rmnc[s_ind], cos_mu_nv)[0]
+        Z = np.dot(self.zmns[s_ind], sin_mu_nv)[0]
+        
+        print('R: {0}\nZ: {1}'.format(R, Z))
+        
+    def cyld_to_flux(self, R, v, Z, thresh=1e-9):
+        s = .3
+        u = .2
+        
+        R_aprx = 0
+        Z_aprx = 0
+        
+        err = (R - R_aprx)**2 + (Z - Z_aprx)**2
+        
+        while err > thresh:        
+            s_ind = find_nearest(self.s_dom, s)
+            
+            pol_xm = self.xm.reshape(self.md, 1) * u
+            tor_xn = self.xn.reshape(self.md, 1) * v
+            
+            cos_mu_nv = np.cos(pol_xm - tor_xn)
+            sin_mu_nv = np.sin(pol_xm - tor_xn)
+    
+            R_aprx = np.dot(self.rmnc[s_ind], cos_mu_nv)[0]
+            Z_aprx = np.dot(self.zmns[s_ind], sin_mu_nv)[0]
+            
+            dRu_aprx = np.dot(-self.rmnc[s_ind]*self.xm, sin_mu_nv)
+            dZu_aprx = np.dot(self.zmns[s_ind]*self.xm, cos_mu_nv)
+            
+            dRs_aprx = np.dot(self.Drmnc[s_ind], cos_mu_nv)
+            dZs_aprx = np.dot(self.Dzmns[s_ind], sin_mu_nv)
+            
+            tau = dRu_aprx * dZs_aprx - dRs_aprx * dZu_aprx
+            
+            u = u + ( (dZs_aprx * (R - R_aprx) - dRs_aprx * (Z - Z_aprx)) / tau )
+            s = s + ( (dRu_aprx * (Z - Z_aprx) - dZu_aprx * (R - R_aprx)) / tau )
+            
+            err = (R - R_aprx)**2 + (Z - Z_aprx)**2
+            
+            print('u: {0}\ns: {1}\n'.format(u, s))
+        
 dirc_name = os.getcwd()
 file_name = os.path.join(dirc_name, 'wout_HSX_test_opt0.nc')
 fig_dirc = os.path.join(dirc_name, 'Figures')
 
 vmec_data = readVMEC(file_name)
 vmec_data.polarCoord()
-
 vmec_data.plot_3D_B()
-'''
-v_dom = np.linspace(0, .5*np.pi, 15)
-for v in v_dom:
-    vmec_data.arc_leng(fig_dirc, v, 126)
-'''
